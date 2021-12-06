@@ -1,5 +1,5 @@
 """Utility functions for Hierarchical risk parity demo.
-1. Regular help functions, e.g. normalise
+1. Analytic help functions, e.g. normalise
 2. Data loading functions (from local .csv files)
 """
 

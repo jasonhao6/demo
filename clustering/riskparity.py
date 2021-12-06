@@ -1,12 +1,10 @@
-"""Python code to demo Hierarchical Risk Parity.
-1. Data source from local .csv file
-2. Min-Volatility strategy
-3. Inverse-Volatility strategy (Traditional Risk Parity)
-4. scikit-learn.clustering.hierarchical clustering
-5. Hierarchical Risk Parity strategy
+"""Hierarchical Risk Parity Algorithm
+1. Hierarchical Risk Parity (using tree structure)
+2. Hierarchy Risk Parity (using bi-section, original implementation by Marcos Lopez de Prado)
+3. Simple Risk Parity (Inverse Volatility)
+4. Min Variance Optimization
 
 # https://docs.scipy.org/doc/scipy/reference/generated/scipy.cluster.hierarchy.linkage.html
-# https://docs.scipy.org/doc/scipy/reference/generated/scipy.cluster.hierarchy.dendrogram.html
 """
 
 import collections
@@ -62,79 +60,6 @@ def corr_dist_prabo(v, v2):
     r = np.corrcoef(v, v2)
     r = r[0, 1]  # 2x2 array to off-diagonal element
     return np.sqrt(0.5 * (1 - r))
-
-
-# ### ### ### Volatility Help Function ### ### ### #
-
-def get_year_frac(start_date, end_date):
-    """Get number of year in fraction between two dates.
-    This implementation is an estimate, revisit here Jason.
-    """
-    delta = dateutil.relativedelta.relativedelta(end_date, start_date)
-    return delta.years + delta.months / 12 + delta.days / 365.25
-
-
-def compute_volatility_from_returns(data, start=None, end=None):
-    start = data.first_valid_index() if start is None else start
-    end = data.last_valid_index() if end is None else end
-    num_years = get_year_frac(start, end)
-    periods_per_year = len(data.index) / num_years
-    return np.sqrt(periods_per_year) * data.std()
-
-
-def compute_cagr(data, start=None, end=None):
-    """Input close price data. """
-    start = data.first_valid_index() if start is None else start
-    end = data.last_valid_index() if end is None else end
-    num_years = get_year_frac(start, end)
-
-    first_index = data.first_valid_index()
-    last_index = data.last_valid_index()
-    ratio = np.divide(data.loc[last_index], data.loc[first_index])
-    cagr = np.power(ratio, 1 / num_years) - 1
-    return cagr
-
-
-# ### ### ### Inverse Volatility Risk Parity ### ### ### #
-
-class InvVolRiskParity:
-    """Traditional Inverse Volatility Risk Parity
-
-    Input time-series Data Frame with columns as tickers
-    """
-
-    def __init__(self, data, start=None, end=None):
-        start = data.first_valid_index() if start is None else pd.to_datetime(start)
-        end = data.last_valid_index() if end is None else pd.to_datetime(end)
-
-        self._data = data[start:end]
-        self.start = start
-        self.end = end
-
-        self._vol = None
-        self._weight = None
-        return
-
-    @property
-    def data(self):
-        return self._data
-
-    @property
-    def symbols(self):
-        return self._data.columns.tolist()
-
-    @property
-    def weight(self):
-        return self._weight
-
-    def run(self):
-        vol = compute_volatility_from_returns(self.data)
-        inv_vol = 1 / vol
-        weight = inv_vol / inv_vol.sum()
-
-        self._vol = vol
-        self._weight = weight
-        return
 
 
 # ### ### ### Hierarchy Risk Parity ### ### ### #
@@ -386,6 +311,79 @@ class HierarchyRiskParityPrado(HierarchyRiskParity):
         return 'Hierarchy Risk Parity with Bisection Weight Allocation (method={}, metric={})'.format(
             self.method, self.metric
         )
+
+
+# ### ### ### Volatility Help Function ### ### ### #
+
+def get_year_frac(start_date, end_date):
+    """Get number of year in fraction between two dates.
+    This implementation is an estimate, revisit here Jason.
+    """
+    delta = dateutil.relativedelta.relativedelta(end_date, start_date)
+    return delta.years + delta.months / 12 + delta.days / 365.25
+
+
+def compute_volatility_from_returns(data, start=None, end=None):
+    start = data.first_valid_index() if start is None else start
+    end = data.last_valid_index() if end is None else end
+    num_years = get_year_frac(start, end)
+    periods_per_year = len(data.index) / num_years
+    return np.sqrt(periods_per_year) * data.std()
+
+
+def compute_cagr(data, start=None, end=None):
+    """Input close price data. """
+    start = data.first_valid_index() if start is None else start
+    end = data.last_valid_index() if end is None else end
+    num_years = get_year_frac(start, end)
+
+    first_index = data.first_valid_index()
+    last_index = data.last_valid_index()
+    ratio = np.divide(data.loc[last_index], data.loc[first_index])
+    cagr = np.power(ratio, 1 / num_years) - 1
+    return cagr
+
+
+# ### ### ### Inverse Volatility Risk Parity ### ### ### #
+
+class InvVolRiskParity:
+    """Traditional Inverse Volatility Risk Parity
+
+    Input time-series Data Frame with columns as tickers
+    """
+
+    def __init__(self, data, start=None, end=None):
+        start = data.first_valid_index() if start is None else pd.to_datetime(start)
+        end = data.last_valid_index() if end is None else pd.to_datetime(end)
+
+        self._data = data[start:end]
+        self.start = start
+        self.end = end
+
+        self._vol = None
+        self._weight = None
+        return
+
+    @property
+    def data(self):
+        return self._data
+
+    @property
+    def symbols(self):
+        return self._data.columns.tolist()
+
+    @property
+    def weight(self):
+        return self._weight
+
+    def run(self):
+        vol = compute_volatility_from_returns(self.data)
+        inv_vol = 1 / vol
+        weight = inv_vol / inv_vol.sum()
+
+        self._vol = vol
+        self._weight = weight
+        return
 
 
 # ### ### ### Min Variance Portfolio ### ### ### #
