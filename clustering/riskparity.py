@@ -35,6 +35,17 @@ def get_sub_cluster_var(cov, symbols):
     return out_var
 
 
+def get_sub_cluster_var_by_weight(cov, weight, symbols):
+    """Compute the sub-cluster variance as w * Var * w, where w starts with equal weight."""
+    w = weight.loc[symbols]
+    w = w / w.sum()
+    sub_cov = cov.loc[symbols, symbols]
+    # inv_var = np.reciprocal(np.diag(sub_cov.values))
+    # inv_var_w = np.divide(inv_var, inv_var.sum())
+    out_var = np.matmul(w, np.matmul(sub_cov.values, w))
+    return out_var
+
+
 def bisector_var_weight(cov, symbols):
     """Recursive bisector weight allocation based on input covariance matrix. """
     weight = pd.Series(1, index=symbols)
@@ -187,6 +198,8 @@ class HierarchyRiskParity:
             # this can be replaced by volatility or something else
             left_var = get_sub_cluster_var(cov, left_syms)
             right_var = get_sub_cluster_var(cov, right_syms)
+            # left_var = get_sub_cluster_var2(cov, weight, left_syms)
+            # right_var = get_sub_cluster_var2(cov, weight, right_syms)
 
             # across-cluster allocation
             alpha = right_var / (left_var + right_var)
@@ -224,7 +237,7 @@ class HierarchyRiskParity:
         return ax
 
     def __repr__(self):
-        return 'Hierarchy Risk Parity (method={}, metric={})'.format(self.method, self.metric)
+        return 'Hierarchy Risk Parity (method={}, metric={})'.format(self.method, self.metric.__name__)
 
 
 class HierarchyRiskParityPrado(HierarchyRiskParity):
@@ -239,8 +252,12 @@ class HierarchyRiskParityPrado(HierarchyRiskParity):
     3. Bisection weight allocation (no use of tree structure obtained in step 1)
     """
 
-    def __init__(self, data, **kwargs):
-        super().__init__(data, **kwargs)
+    DEFAULT_METHOD = 'single'
+
+    def __init__(self, data, method=None, **kwargs):
+        if method is None:
+            method = self.DEFAULT_METHOD
+        super().__init__(data, method=method, **kwargs)
         return
 
     @property
@@ -308,43 +325,27 @@ class HierarchyRiskParityPrado(HierarchyRiskParity):
         return [nodes]
 
     def __repr__(self):
-        return 'Hierarchy Risk Parity with Bisection Weight Allocation (method={}, metric={})'.format(
-            self.method, self.metric
+        return 'Hierarchy Risk Parity Bisection Allocation (method={}, metric={})'.format(
+            self.method, self.metric.__name__
         )
 
 
-# ### ### ### Volatility Help Function ### ### ### #
+# ### ### ### Inverse Volatility Risk Parity ### ### ### #
 
 def get_year_frac(start_date, end_date):
-    """Get number of year in fraction between two dates.
-    This implementation is an estimate, revisit here Jason.
-    """
+    """Redundant copy to be removed later."""
     delta = dateutil.relativedelta.relativedelta(end_date, start_date)
     return delta.years + delta.months / 12 + delta.days / 365.25
 
 
 def compute_volatility_from_returns(data, start=None, end=None):
+    """Redundant copy to be removed later."""
     start = data.first_valid_index() if start is None else start
     end = data.last_valid_index() if end is None else end
     num_years = get_year_frac(start, end)
     periods_per_year = len(data.index) / num_years
     return np.sqrt(periods_per_year) * data.std()
 
-
-def compute_cagr(data, start=None, end=None):
-    """Input close price data. """
-    start = data.first_valid_index() if start is None else start
-    end = data.last_valid_index() if end is None else end
-    num_years = get_year_frac(start, end)
-
-    first_index = data.first_valid_index()
-    last_index = data.last_valid_index()
-    ratio = np.divide(data.loc[last_index], data.loc[first_index])
-    cagr = np.power(ratio, 1 / num_years) - 1
-    return cagr
-
-
-# ### ### ### Inverse Volatility Risk Parity ### ### ### #
 
 class InvVolRiskParity:
     """Traditional Inverse Volatility Risk Parity
