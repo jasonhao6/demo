@@ -70,9 +70,9 @@ def get_single_tsdf(ticker, csv_dir=CSV_DIR, col_date=COL_DATE):
     return None
 
 
-def get_sector_etf_close(tickers, benchmark='SPY', start=None, end=None):
+def get_sector_etf_close(tickers, benchmark='SPY', start=None, end=None, item='adjusted close'):
     # Sector ETF adjusted close
-    df_close = get_ts(tickers)
+    df_close = get_ts(tickers, item=item)
     df_start = df_close.first_valid_index()
     df_end = df_close.last_valid_index()
 
@@ -86,7 +86,7 @@ def get_sector_etf_close(tickers, benchmark='SPY', start=None, end=None):
         bench_close = None
     else:
         benchmark = 'SPY'
-        bench_close = get_ts(benchmark)
+        bench_close = get_ts(benchmark, item=item)
         bench_close = bench_close[benchmark]
         bench_close = bench_close[start:end]
     return df_close, bench_close
@@ -133,11 +133,12 @@ def get_year_frac(start_date, end_date):
     return delta.years + delta.months / 12 + delta.days / 365.25
 
 
-def compute_volatility_from_returns(data, start=None, end=None):
-    start = data.first_valid_index() if start is None else start
-    end = data.last_valid_index() if end is None else end
-    num_years = get_year_frac(start, end)
-    periods_per_year = len(data.index) / num_years
+def compute_volatility_from_returns(data, periods_per_year=None, start=None, end=None):
+    if periods_per_year is None:
+        start = data.first_valid_index() if start is None else start
+        end = data.last_valid_index() if end is None else end
+        num_years = get_year_frac(start, end)
+        periods_per_year = len(data.index) / num_years
     return np.sqrt(periods_per_year) * data.std()
 
 
