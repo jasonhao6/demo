@@ -163,6 +163,14 @@ def downsample_ts_value(daily, freq='M', keep_first=True):
     return df
 
 
+def downsample_price_and_return_data(daily_price):
+    """Output (price, return)-tuple data at different frequency ('m', 'd') in form of x[freq] """
+    monthly_price = downsample_ts_value(daily_price)
+    daily_ret = daily_price.pct_change().dropna(axis=0, how='all')
+    monthly_ret = monthly_price.pct_change().dropna(axis=0, how='all')
+    return {'d': daily_price, 'm': monthly_price}, {'d': daily_ret, 'm': monthly_ret}
+
+
 def compute_performance_stats_dm(df_close):
     """Compute basic performance stats return, volatility and Sharpe based on daily and monthly data. """
     # Performance stats based on daily data
@@ -188,20 +196,47 @@ def compute_performance_stats_dm(df_close):
     return df_stats
 
 
+def plot_rolling_volatility(daily_price, num_years=3):
+    _, returns = downsample_price_and_return_data(daily_price)
+
+    # rolling volatility estimates from daily returns
+    window = num_years * DAYS_PER_YEAR
+    daily_rolling_vol = returns['d'].rolling(window=window, min_periods=window - 1).std().dropna(how='all')
+    daily_rolling_vol *= np.sqrt(DAYS_PER_YEAR)  # annualization
+
+    # rolling volatility estimates from monthly returns
+    window = num_years * MONTHS_PER_YEAR
+    monthly_rolling_vol = returns['m'].rolling(window=window, min_periods=window - 1).std().dropna(how='all')
+    monthly_rolling_vol *= np.sqrt(MONTHS_PER_YEAR)  # annualization
+
+    # plot volatility estimates daily vs. monthly, ticker by ticker
+    tickers = daily_price.columns.tolist()
+    fig_map = collections.OrderedDict([(x, None) for x in tickers])
+    for tix in tickers:
+        title = '{} {}-Year Rolling Volatility Estimates'.format(tix, num_years)
+        d_rvol = daily_rolling_vol[tix]
+        m_rvol = monthly_rolling_vol[tix]
+
+        fig, ax = plt.subplots(1, 1, figsize=(15, 5))
+        d_rvol.to_frame('{} Volatility Daily'.format(tix)).plot(ax=ax, linewidth=1)
+        m_rvol.to_frame('{} Volatility Monthly'.format(tix)).plot(ax=ax, linestyle=':', linewidth=3)
+        ax.set_title(title, fontsize=22)
+        ax.legend(fontsize='x-large')
+        fig_map[tix] = fig
+    return fig_map
+
+
 # ### ### ### ACF and AR(1) Model ### ### ### #
 
-def plot_acf_dm(daily_close, monthly_close=None):
+def plot_acf_dm(daily_close):
     """Plot ACF based on both daily and monthly return data. """
-    if monthly_close is None:
-        monthly_close = downsample_ts_value(daily_close)
-    daily_returns = daily_close.pct_change().dropna(axis=0, how='all')
-    monthly_returns = monthly_close.pct_change().dropna(axis=0, how='all')
+    _, ret_data = downsample_price_and_return_data(daily_close)
 
     tickers = daily_close.columns.tolist()
-    fig_map = collections.OrderedDict([tix, None] for tix in tickers)
+    fig_map = collections.OrderedDict([(x, None) for x in tickers])
     for tix in tickers:
-        daily_ts = daily_returns[tix]
-        monthly_ts = monthly_returns[tix]
+        daily_ts = ret_data['d'][tix]
+        monthly_ts = ret_data['m'][tix]
 
         ## ACF plots
         fig, axes = plt.subplots(1, 2, figsize=(16, 5))
@@ -259,4 +294,28 @@ def run_ar_models_dm(daily_close, monthly_close=None, p=1):
     ar_stats = ar_stats .swaplevel(axis=1).sort_index(axis=1)
     return ar_stats
 
+
+# ### ### ### Randomly Generated i.i.d. data ### ### ### #
+
+def fake_iid_ts_data(n=6, dates=None, periods=10*DAYS_PER_YEAR, seed=101, initial_value=100.):
+    """Fake i.i.d. identical and independent time-series data.
+    """
+    if dates is None:
+        dates = pd.date_range(end='2021/01/31', periods=periods, freq='B')
+    else:
+        periods = len(dates)
+
+    np.random.seed(seed)
+    ret_vals = np.random.randn(periods, n)
+    random_vol = 0.01 * np.random.randint(11, 25, n)
+
+    tickers = ['Fake {}'.format(x + 1) for x in range(n)]
+    s_random_vol = pd.Series(random_vol, index=tickers)
+
+    daily_fake_ret = pd.DataFrame(ret_vals, columns=tickers, index=dates)
+    daily_fake_ret = daily_fake_ret.multiply(s_random_vol) / np.sqrt(DAYS_PER_YEAR)
+    daily_fake_price = initial_value * (1 + daily_fake_ret).cumprod()
+
+    print(s_random_vol.to_frame('Fake Target Volatility'))
+    return daily_fake_price
 
